@@ -6,5 +6,7 @@ int main(){
 	printf("Please input two integers\n");
 	scanf("%d %d",&a,&b);
 	printf("The GCD of a and b is:%d \n",GCD(a,b));
+	printf("Done\n");
 }
+
 
