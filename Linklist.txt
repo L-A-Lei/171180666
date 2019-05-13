@@ -1,0 +1,147 @@
+#include<stdio.h>
+#include<malloc.h>
+#include<stdlib.h>
+
+typedef int ElementType;       
+typedef struct ListNode {
+    ElementType  Element;       
+    ListNode* Next;        
+}Node, *PNode;
+
+//    函数声明
+PNode CreateList(void);    
+void TraverseList(PNode List);    
+void InsertList(PNode List, int pos, int val);        
+void DeleteTheList(PNode List);    
+void DeleteList(PNode List, int pos);    
+PNode FindList(PNode List);    
+
+//    主函数 
+int main() {
+    PNode List = CreateList();    
+    TraverseList(List);       
+    FindList(List);         
+    InsertList(List, 3, 100);    
+    TraverseList(List);
+    DeleteList(List, 3);    
+    TraverseList(List);
+    DeleteTheList(List);    
+    TraverseList(List);
+    return 0;
+}
+
+//    创建链表函数定义
+PNode CreateList(void) {
+    int len ;    
+    int val ;    
+    PNode PHead = (PNode)malloc(sizeof(Node));    
+    if (PHead == NULL)    
+    {
+        printf("空间分配失败 \n");
+        exit(-1);
+    }
+
+    PNode PTail = PHead;    
+    PTail->Next = NULL;    
+    printf("请输入节点个数：");
+    scanf_s("%d", &len);        
+    for (int i = 0; i < len; i++) {
+
+        PNode PNew = (PNode)malloc(sizeof(Node));    
+        if (PNew == NULL) {
+            printf("分配新节点失败\n");
+            exit(-1);
+        }
+        printf("请输入第 %d 个节点的数据：", i + 1);
+        scanf_s("%d", &val);    
+
+        PNew->Element = val;    
+        PTail->Next = PNew;    
+        PNew->Next = NULL;        
+        PTail = PNew;     
+    }
+    printf("创建链表成功\n");
+    return PHead;    
+}
+
+//    定义链表遍历函数
+void TraverseList(PNode List) {
+    PNode P = List->Next;    
+    printf("遍历链表的值为：");
+    if (P == NULL)
+        printf("链表为空");
+    while (P != NULL)       
+    {
+        printf("%d ", P->Element);
+        P = P->Next;
+    }
+    printf("\n");
+}
+
+//    定义链表查询函数
+PNode FindList(PNode List) {
+    PNode P = List->Next;    
+    int num = 0;    
+    int val = 0;    
+    printf("请输入要查询的数：");
+    scanf_s("%d", &val);    
+    while (P != NULL&&P->Element != val) {
+        P = P->Next;
+        ++num;
+    }
+    if (P != NULL)
+        printf("找到的节点为：%d", num + 1);
+    else
+        printf("找不到该节点");
+    printf("\n");
+    return P;
+}
+
+void InsertList(PNode List, int pos, int val) {
+    int position = 0;
+    PNode P = List;   
+                    
+    while (P != NULL&&position<pos - 1)
+    {
+        P = P->Next;
+        ++position;
+    }
+    PNode Tmp = (PNode)malloc(sizeof(Node));    
+    if (Tmp == NULL)
+    {
+        printf("内存分配失败！");
+        exit(-1);
+    }
+    
+    Tmp->Element = val;
+    Tmp->Next = P->Next;
+    P->Next = Tmp;
+}
+
+
+void DeleteTheList(PNode List) {
+    PNode P, Tmp;
+    P = List->Next;   
+    List->Next = NULL;
+    while (P != NULL) {
+        Tmp = P->Next;       
+        free(P);    
+        P = Tmp;    
+    }
+    printf("删除链表成功！\n");
+}
+
+void DeleteList(PNode List, int pos) {
+    int position = 0;
+    PNode P = List;    
+    while (P != NULL&&position < pos - 1) {
+        P = P->Next;
+        ++position;
+    }
+
+    //    删除节点
+    PNode Tmp = P->Next;    
+    P->Next = Tmp->Next;    
+    free(Tmp);    
+    Tmp = NULL;    
+}
