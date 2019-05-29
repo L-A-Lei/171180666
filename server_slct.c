@@ -5,30 +5,42 @@
 #include<arpa/inet.h>  
 #include<string.h>  
 #include<unistd.h>  
-#define BACKLOG 5     //完成三次握手但没有accept的队列的长度  
-#define CONCURRENT_MAX 8   //应用层同时可以处理的连接  
+#include<linklist.h>
+
+#define BACKLOG 5       
+#define CONCURRENT_MAX 500  
 #define SERVER_PORT 11332  
 #define BUFFER_SIZE 1024  
-#define QUIT_CMD ".quit"  
+#define QUIT_CMD "quit"  
+#define MAX_NAME_LEN 10
 int client_fds[CONCURRENT_MAX];  
 int main(int argc, const char * argv[])  
 {  
     char input_msg[BUFFER_SIZE];  
     char recv_msg[BUFFER_SIZE];  
-    //本地地址  
+    char name[CONCURRENT_MAX][BUFFER_SIZE]; 
+    fd_set server_fd_set;  
+    int max_fd = -1;  
+    struct timeval tv;
+    int j, i;
+    int flag;//For name check
+    PNode L = CreateList();
+    PNode p = (PNode)malloc(sizeof(Node)); 
+
     struct sockaddr_in server_addr;  
     server_addr.sin_family = AF_INET;  
     server_addr.sin_port = htons(SERVER_PORT);  
     server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");  
+
     bzero(&(server_addr.sin_zero), 8);  
-    //创建socket  
+
     int server_sock_fd = socket(AF_INET, SOCK_STREAM, 0);  
     if(server_sock_fd == -1)  
     {  
         perror("socket error");  
         return 1;  
     }  
-    //绑定socket  
+    //bind
     int bind_result = bind(server_sock_fd, (struct sockaddr *)&server_addr, sizeof(server_addr));  
     if(bind_result == -1)  
     {  
@@ -41,11 +53,8 @@ int main(int argc, const char * argv[])
         perror("listen error");  
         return 1;  
     }  
-    //fd_set  
-    fd_set server_fd_set;  
-    int max_fd = -1;  
-    struct timeval tv;  //超时时间设置  
-    while(1)  
+
+    while(1)//Initialize the structure server_fd_set  
     {  
         tv.tv_sec = 20;  
         tv.tv_usec = 0;  
@@ -55,18 +64,15 @@ int main(int argc, const char * argv[])
         {  
             max_fd = STDIN_FILENO;  
         }  
-        //printf("STDIN_FILENO=%d\n", STDIN_FILENO);  
-    //服务器端socket  
         FD_SET(server_sock_fd, &server_fd_set);  
-       // printf("server_sock_fd=%d\n", server_sock_fd);  
-        if(max_fd < server_sock_fd)  
+        
+	if(max_fd < server_sock_fd)  
         {  
             max_fd = server_sock_fd;  
         }  
-    //客户端连接  
-        for(int i =0; i < CONCURRENT_MAX; i++)  
+
+        for(i =0; i < CONCURRENT_MAX; i++)  
         {  
-            //printf("client_fds[%d]=%d\n", i, client_fds[i]);  
             if(client_fds[i] != 0)  
             {  
                 FD_SET(client_fds[i], &server_fd_set);  
@@ -79,47 +85,44 @@ int main(int argc, const char * argv[])
         int ret = select(max_fd + 1, &server_fd_set, NULL, NULL, &tv);  
         if(ret < 0)  
         {  
-            perror("select 出错\n");  
+            perror("select error韁n");  
             continue;  
         }  
         else if(ret == 0)  
         {  
-            printf("select 超时\n");  
+            printf("select overtime\n");  
             continue;  
         }  
         else  
         {  
-            //ret 为未状态发生变化的文件描述符的个数  
-            if(FD_ISSET(STDIN_FILENO, &server_fd_set))  
+            if(FD_ISSET(STDIN_FILENO, &server_fd_set)) //Send massage to clients 
             {  
-                printf("发送消息：\n");  
                 bzero(input_msg, BUFFER_SIZE);  
                 fgets(input_msg, BUFFER_SIZE, stdin);  
-                //输入“.quit"则退出服务器  
+		for(i = 0; input_msg[i] != '\n'; )
+			i++;
+		input_msg[i] = '\0';
                 if(strcmp(input_msg, QUIT_CMD) == 0)  
                 {  
-                    exit(0);  
+		    exit(0);  
                 }  
-                for(int i = 0; i < CONCURRENT_MAX; i++)  
+                for(i = 0; i < CONCURRENT_MAX; i++)  
                 {  
                     if(client_fds[i] != 0)  
                     {  
-                        printf("client_fds[%d]=%d\n", i, client_fds[i]);  
                         send(client_fds[i], input_msg, BUFFER_SIZE, 0);  
                     }  
                 }  
             }  
-            if(FD_ISSET(server_sock_fd, &server_fd_set))  
+            if(FD_ISSET(server_sock_fd, &server_fd_set)) //Connect with new clients 
             {  
-                //有新的连接请求  
                 struct sockaddr_in client_address;  
                 socklen_t address_len;  
                 int client_sock_fd = accept(server_sock_fd, (struct sockaddr *)&client_address, &address_len);  
-                printf("new connection client_sock_fd = %d\n", client_sock_fd);  
                 if(client_sock_fd > 0)  
                 {  
                     int index = -1;  
-                    for(int i = 0; i < CONCURRENT_MAX; i++)  
+                    for(i = 0; i < CONCURRENT_MAX; i++)  
                     {  
                         if(client_fds[i] == 0)  
                         {  
@@ -128,26 +131,35 @@ int main(int argc, const char * argv[])
                             break;  
                         }  
                     }  
-                    if(index >= 0)  
-                    {  
-                        printf("新客户端(%d)加入成功 %s:%d\n", index, inet_ntoa(client_address.sin_addr), ntohs(client_address.sin_port));  
-                    }  
-                    else  
+			read(client_sock_fd, name[i], BUFFER_SIZE);
+			p = FindList(L, name[i]);
+			if(ListEmpty(L) || p == NULL)
+			{
+				flag = 1;
+				write(client_sock_fd, &flag, sizeof(int));
+                        	printf("New client(%d):%s joins\n", index, name[i]);  
+		    		InsertList(L, name[i]);//Add the new name
+			}
+			else
+			{
+				flag = 0;
+				write(client_sock_fd, &flag, sizeof(int));//Tell the client that the name is used
+				client_fds[i] = 0;//Client failed to connect
+				index = -1;
+			}
+                    if(index < 0)  
                     {  
                         bzero(input_msg, BUFFER_SIZE);  
-                        strcpy(input_msg, "服务器加入的客户端数达到最大值,无法加入!\n");  
-                        send(client_sock_fd, input_msg, BUFFER_SIZE, 0);  
-                        printf("客户端连接数达到最大值，新客户端加入失败 %s:%d\n", inet_ntoa(client_address.sin_addr), ntohs(client_address.sin_port));  
+                        printf("The name has been used! New client failed to join %s:%d\n", inet_ntoa(client_address.sin_addr), ntohs(client_address.sin_port));  
                     }  
                 }  
             }  
-            for(int i =0; i < CONCURRENT_MAX; i++)  
+            for(i = 0; i < CONCURRENT_MAX; i++) //Receive from clients and send the massage to all clients 
             {  
                 if(client_fds[i] !=0)  
                 {  
                     if(FD_ISSET(client_fds[i], &server_fd_set))  
                     {  
-                        //处理某个客户端过来的消息  
                         bzero(recv_msg, BUFFER_SIZE);  
                         long byte_num = recv(client_fds[i], recv_msg, BUFFER_SIZE, 0);  
                         if (byte_num > 0)  
@@ -157,17 +169,31 @@ int main(int argc, const char * argv[])
                                 byte_num = BUFFER_SIZE;  
                             }  
                             recv_msg[byte_num] = '\0';  
-                            printf("客户端(%d):%s\n", i, recv_msg);  
-                        }  
+                            printf("client(%d)/%s:%s\n", i, name[i], recv_msg);  
+			    // Send the massage to all clients
+                       	    for(j = 0; j < CONCURRENT_MAX; j++)
+			    {
+			    	if(client_fds[j] != 0)
+				{
+					char msg[BUFFER_SIZE];
+					strcpy(msg, name[i]);
+					strcat(msg, ": ");
+					strcat(msg, recv_msg);
+                        		send(client_fds[j], msg, BUFFER_SIZE, 0);  
+				}
+			    }
+		       	}  
                         else if(byte_num < 0)  
                         {  
-                            printf("从客户端(%d)接受消息出错.\n", i);  
+                            printf("receive from client(%d) error.\n", i);  
                         }  
                         else  
                         {  
                             FD_CLR(client_fds[i], &server_fd_set);  
                             client_fds[i] = 0;  
-                            printf("客户端(%d)退出了\n", i);  
+                            printf("client(%d):%s quit\n", i, name[i]);
+			    DeleteList(L, name[i]); 
+			    name[i][0] = '\0';//Delete a client's name after it logged out 
                         }  
                     }  
                 }  
